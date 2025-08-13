@@ -1,20 +1,39 @@
 import os
 from dotenv import load_dotenv
 
+# Load environment variables
 load_dotenv()
 
 class Config:
     # Flask settings
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key-change-in-production'
-    DEBUG = os.environ.get('FLASK_DEBUG', 'True').lower() == 'true'
+    SECRET_KEY = os.getenv('SECRET_KEY', 'samacheer-kalvi-secret-key')
+    DEBUG = os.getenv('FLASK_ENV') == 'development'
     
-    # PDF settings
-    PDF_DOWNLOAD_TIMEOUT = 30
-    MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB max file size
+    # OpenAI settings
+    OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
     
-    # API settings
-    API_VERSION = 'v1'
-    API_PREFIX = f'/api/{API_VERSION}'
+    # Database settings (if needed)
+    DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///samacheer_kalvi.db')
+    
+    # File upload settings
+    MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
+    UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', 'uploads')
+    
+    # Textbook settings
+    TEXTBOOK_FOLDER = os.getenv('TEXTBOOK_FOLDER', 'textbooks')
     
     # CORS settings
-    CORS_ORIGINS = ['http://localhost:3000', 'http://localhost:3001']
+    CORS_ORIGINS = os.getenv('CORS_ORIGINS', 'http://localhost:3000').split(',')
+
+class DevelopmentConfig(Config):
+    DEBUG = True
+
+class ProductionConfig(Config):
+    DEBUG = False
+
+# Configuration dictionary
+config = {
+    'development': DevelopmentConfig,
+    'production': ProductionConfig,
+    'default': DevelopmentConfig
+}

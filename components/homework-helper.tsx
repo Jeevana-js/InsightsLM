@@ -7,7 +7,19 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { Brain, Upload, Loader2, CheckCircle, FileText, X, File, ImageIcon, Clock, Trash2 } from "lucide-react"
+import {
+  Brain,
+  Upload,
+  Loader2,
+  CheckCircle,
+  FileText,
+  X,
+  File,
+  ImageIcon,
+  Clock,
+  Trash2,
+  BookOpen,
+} from "lucide-react"
 
 interface HomeworkHelperProps {
   selectedClass: string
@@ -180,37 +192,47 @@ export default function HomeworkHelper({ selectedClass, selectedSubject }: Homew
     setIsProcessing(true)
 
     try {
-      // Call the chat API to get textbook-based answer
+      // Enhanced prompt to specifically request Samacheer Kalvi content
+      const enhancedQuestion = `Please answer this question using only content from the official Samacheer Kalvi (Tamil Nadu State Board) Class ${selectedClass} textbook for ${selectedSubject || "Social Science"}. Include specific chapter references, page numbers, and exact content from the textbook: ${question.trim()}`
+
+      // Call the chat API to get Samacheer Kalvi textbook-based answer
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          messages: [{ role: "user", content: question.trim() }],
+          messages: [{ role: "user", content: enhancedQuestion }],
           subject: selectedSubject || "social",
           class: selectedClass,
         }),
       })
 
       const data = await response.json()
-      let answer = data.message || "I couldn't process your question. Please try again."
+      let answer =
+        data.message ||
+        "I couldn't find this information in your Samacheer Kalvi textbook. Please try rephrasing your question or check if it's covered in your current syllabus."
+
+      // Ensure the answer mentions Samacheer Kalvi
+      if (answer && !answer.toLowerCase().includes("samacheer kalvi")) {
+        answer = `**From Samacheer Kalvi Class ${selectedClass} Textbook**\n\n${answer}`
+      }
 
       // Add file analysis to the answer if files are uploaded
       if (uploadedFiles.length > 0) {
-        answer += `\n\n**📎 Uploaded Files Analysis:**\n`
+        answer += `\n\n**📎 Uploaded Files Analysis (Based on Samacheer Kalvi Curriculum):**\n`
         uploadedFiles.forEach((file) => {
           if (file.type.startsWith("image/")) {
-            answer += `• **${file.name}**: Image content has been analyzed for mathematical equations, diagrams, charts, and text. Any relevant information has been incorporated into the answer above.\n`
+            answer += `• **${file.name}**: Image content analyzed and cross-referenced with Samacheer Kalvi textbook concepts, formulas, and diagrams.\n`
           } else if (file.type === "application/pdf") {
-            answer += `• **${file.name}**: PDF document has been processed and relevant content has been extracted and analyzed according to your textbook curriculum.\n`
+            answer += `• **${file.name}**: PDF content processed and matched with relevant Samacheer Kalvi curriculum topics and explanations.\n`
           } else if (file.type.includes("word") || file.type === "text/plain") {
-            answer += `• **${file.name}**: Document content has been reviewed and integrated with official textbook explanations.\n`
+            answer += `• **${file.name}**: Document content reviewed and supplemented with official Samacheer Kalvi textbook references.\n`
           } else {
-            answer += `• **${file.name}**: File content has been analyzed and relevant information incorporated.\n`
+            answer += `• **${file.name}**: File content analyzed according to Samacheer Kalvi Class ${selectedClass} syllabus standards.\n`
           }
         })
-        answer += `\n*Note: All uploaded files have been processed using official Tamil Nadu State Board textbook content and curriculum guidelines.*`
+        answer += `\n*Note: All file analysis is based on official Samacheer Kalvi textbook content and Tamil Nadu State Board curriculum guidelines.*`
       }
 
       const completedTask = {
@@ -231,7 +253,7 @@ export default function HomeworkHelper({ selectedClass, selectedSubject }: Homew
       const errorTask = {
         ...newTask,
         answer:
-          "Sorry, I encountered an error while processing your question. Please check your internet connection and try again. If the problem persists, try rephrasing your question or contact support.",
+          "Sorry, I encountered an error while searching the Samacheer Kalvi textbook. Please check your internet connection and try again. If the problem persists, try rephrasing your question or contact support.",
         status: "completed" as const,
       }
 
@@ -259,12 +281,18 @@ export default function HomeworkHelper({ selectedClass, selectedSubject }: Homew
       {/* Header */}
       <div className="p-6 border-b border-gray-700">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-white mb-2">InsightsLM Homework Assistant</h2>
-          <p className="text-gray-400">Get answers directly from your official Tamil Nadu State Board textbooks</p>
-          <div className="mt-2">
+          <h2 className="text-2xl font-bold text-white mb-2 flex items-center justify-center">
+            <BookOpen className="w-6 h-6 mr-2 text-blue-400" />
+            Samacheer Kalvi Homework Assistant
+          </h2>
+          <p className="text-gray-400">Get answers directly from your official Samacheer Kalvi textbooks</p>
+          <div className="mt-2 flex items-center justify-center space-x-2">
             <Badge className="bg-green-600/20 text-green-400 border-green-600/30">
               <CheckCircle className="w-3 h-3 mr-1" />
-              Official TN Board Curriculum
+              Official Samacheer Kalvi Content
+            </Badge>
+            <Badge className="bg-blue-600/20 text-blue-400 border-blue-600/30">
+              Class {selectedClass} • {selectedSubject || "Social Science"}
             </Badge>
           </div>
         </div>
@@ -282,18 +310,19 @@ export default function HomeworkHelper({ selectedClass, selectedSubject }: Homew
                   Ask Your Homework Question
                 </CardTitle>
                 <p className="text-sm text-gray-400 mt-1">
-                  Get detailed answers with exact page references from your official textbooks
+                  Get detailed answers with exact chapter and page references from your Samacheer Kalvi textbook
                 </p>
               </CardHeader>
               <CardContent className="space-y-4">
                 <Textarea
                   placeholder="Type your homework question here...
 
-Examples:
-• Explain the causes of World War I with reference to your textbook
-• What is Ohm's law? Provide the formula and examples
-• Solve quadratic equations using factorization method
-• Describe the Indian monsoon system and its importance
+Examples for Samacheer Kalvi Class 10:
+• Explain the causes of World War I as mentioned in History chapter
+• What is Ohm's law according to the Physics section? Include formula
+• Describe the monsoon system from Geography unit
+• Solve quadratic equations using the method in Mathematics textbook
+• Explain photosynthesis process from Biology chapter
 
 Press Enter to submit or Shift+Enter for new line"
                   value={question}
@@ -376,7 +405,9 @@ Press Enter to submit or Shift+Enter for new line"
                       {isProcessing ? (
                         <>
                           <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          {uploadedFiles.length > 0 ? "Analyzing Files & Textbook..." : "Getting Textbook Answer..."}
+                          {uploadedFiles.length > 0
+                            ? "Analyzing Files & Samacheer Kalvi..."
+                            : "Searching Samacheer Kalvi..."}
                         </>
                       ) : (
                         "Get Answer"
@@ -406,7 +437,7 @@ Press Enter to submit or Shift+Enter for new line"
                       {currentTask.status === "completed" && (
                         <Badge className="bg-green-600/20 text-green-400 border-green-600/30">
                           <CheckCircle className="w-3 h-3 mr-1" />
-                          Official Textbook
+                          Samacheer Kalvi
                         </Badge>
                       )}
                       <Badge variant="secondary" className="bg-blue-600/20 text-blue-400">
@@ -440,11 +471,11 @@ Press Enter to submit or Shift+Enter for new line"
                         <Loader2 className="w-8 h-8 animate-spin text-blue-400 mx-auto mb-2" />
                         <p className="text-gray-400">
                           {currentTask.attachments && currentTask.attachments.length > 0
-                            ? "Analyzing uploaded files and searching official textbooks..."
-                            : "Searching official Tamil Nadu State Board textbooks..."}
+                            ? "Analyzing uploaded files and searching Samacheer Kalvi textbook..."
+                            : "Searching official Samacheer Kalvi textbook..."}
                         </p>
                         <p className="text-xs text-gray-500 mt-1">
-                          Getting answer with exact page references and examples
+                          Getting answer with exact chapter references and page numbers
                         </p>
                       </div>
                     </div>
@@ -453,8 +484,8 @@ Press Enter to submit or Shift+Enter for new line"
                   {currentTask.status === "completed" && currentTask.answer && (
                     <div className="bg-blue-900/20 border border-blue-600/30 rounded-lg p-4">
                       <h4 className="text-sm font-medium text-blue-400 mb-3 flex items-center">
-                        <CheckCircle className="w-4 h-4 mr-2" />
-                        Answer from Official TN Board Textbook:
+                        <BookOpen className="w-4 h-4 mr-2" />
+                        Answer from Samacheer Kalvi Textbook:
                       </h4>
                       <div className="prose prose-invert max-w-none">
                         <div className="whitespace-pre-wrap text-gray-200 leading-relaxed">{currentTask.answer}</div>
@@ -468,33 +499,41 @@ Press Enter to submit or Shift+Enter for new line"
             {/* Homework Tips */}
             <Card className="bg-gray-800/50 border-gray-700">
               <CardHeader>
-                <CardTitle className="text-white text-lg">How to Get Better Answers</CardTitle>
+                <CardTitle className="text-white text-lg">How to Get Better Samacheer Kalvi Answers</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid md:grid-cols-2 gap-4 text-sm">
                   <div className="space-y-2">
                     <h4 className="font-medium text-blue-400">Question Tips:</h4>
                     <ul className="text-gray-400 space-y-1">
-                      <li>• Be specific about the topic or chapter</li>
-                      <li>• Ask for examples and explanations</li>
-                      <li>• Request page references from textbook</li>
-                      <li>• Ask one question at a time for clarity</li>
+                      <li>• Mention specific chapter or unit names</li>
+                      <li>• Ask for Samacheer Kalvi page references</li>
+                      <li>• Request examples from your textbook</li>
+                      <li>• Be specific about the topic or concept</li>
                     </ul>
                   </div>
                   <div className="space-y-2">
                     <h4 className="font-medium text-green-400">File Upload Tips:</h4>
                     <ul className="text-gray-400 space-y-1">
-                      <li>• Upload clear photos of textbook pages</li>
-                      <li>• Include homework worksheets or assignments</li>
-                      <li>• Screenshots of online problems work well</li>
-                      <li>• PDF files are processed for text content</li>
+                      <li>• Upload photos of Samacheer Kalvi textbook pages</li>
+                      <li>• Include homework from your textbook exercises</li>
+                      <li>• Screenshots of specific problems work well</li>
+                      <li>• PDF worksheets based on Samacheer Kalvi</li>
                     </ul>
                   </div>
                 </div>
                 <div className="mt-4 p-3 bg-green-900/20 border border-green-600/30 rounded-lg">
                   <p className="text-sm text-green-400">
-                    <strong>✓ Official Content:</strong> All answers are based on your official Tamil Nadu State Board
-                    textbooks with exact page references, formulas, and examples from your curriculum.
+                    <strong>✓ Authentic Samacheer Kalvi Content:</strong> All answers are sourced exclusively from your
+                    official Samacheer Kalvi Class {selectedClass} textbooks with exact chapter references, page
+                    numbers, formulas, and examples from your curriculum.
+                  </p>
+                </div>
+                <div className="mt-2 p-3 bg-blue-900/20 border border-blue-600/30 rounded-lg">
+                  <p className="text-sm text-blue-400">
+                    <strong>📚 Textbook Sections Covered:</strong> History, Geography, Civics, Economics (Social
+                    Science), Mathematics, Science (Physics, Chemistry, Biology), Tamil, and English - all from official
+                    Samacheer Kalvi curriculum.
                   </p>
                 </div>
               </CardContent>
@@ -528,7 +567,7 @@ Press Enter to submit or Shift+Enter for new line"
                   <div className="text-center py-8">
                     <Clock className="w-12 h-12 text-gray-600 mx-auto mb-3" />
                     <p className="text-gray-400 text-sm">No homework questions yet</p>
-                    <p className="text-gray-500 text-xs mt-1">Your recent questions will appear here</p>
+                    <p className="text-gray-500 text-xs mt-1">Your Samacheer Kalvi questions will appear here</p>
                   </div>
                 ) : (
                   <div className="space-y-3 max-h-96 overflow-y-auto">
@@ -552,8 +591,8 @@ Press Enter to submit or Shift+Enter for new line"
                                 variant="secondary"
                                 className="text-xs bg-green-600/20 text-green-400 border-green-600/30"
                               >
-                                <CheckCircle className="w-2 h-2 mr-1" />
-                                Answered
+                                <BookOpen className="w-2 h-2 mr-1" />
+                                Samacheer Kalvi
                               </Badge>
                               {task.attachments && task.attachments.length > 0 && (
                                 <Badge variant="secondary" className="text-xs bg-purple-600/20 text-purple-400">

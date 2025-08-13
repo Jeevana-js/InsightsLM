@@ -1,13 +1,25 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+import os
 import requests
 import PyPDF2
 import io
 import re
 from typing import Dict, List, Optional
+from utils.pdf_processor import PDFProcessor
+from utils.ai_service import AIService
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 CORS(app)
+
+# Initialize services
+pdf_processor = PDFProcessor()
+ai_service = AIService()
 
 class TextbookExtractor:
     def __init__(self):
@@ -21,7 +33,7 @@ class TextbookExtractor:
             response.raise_for_status()
             return response.content
         except Exception as e:
-            print(f"Error downloading PDF: {e}")
+            logger.error(f"Error downloading PDF: {e}")
             return None
     
     def extract_text_from_pdf(self, pdf_content: bytes) -> Dict[str, str]:
@@ -39,7 +51,7 @@ class TextbookExtractor:
             return sections
             
         except Exception as e:
-            print(f"Error extracting PDF text: {e}")
+            logger.error(f"Error extracting PDF text: {e}")
             return self.get_fallback_content()
     
     def get_fallback_content(self) -> Dict[str, List[Dict]]:
@@ -415,10 +427,81 @@ class TextbookExtractor:
 # Initialize extractor
 extractor = TextbookExtractor()
 
+@app.route('/api/chat', methods=['POST'])
+def chat():
+    try:
+        data = request.get_json()
+        messages = data.get('messages', [])
+        subject = data.get('subject', '')
+        class_level = data.get('class', '')
+        textbook = data.get('textbook', 'samacheer-kalvi')
+        
+        logger.info(f"Chat request for Class {class_level} {subject} - {textbook}")
+        
+        # Get the user's question
+        user_message = messages[-1]['content'] if messages else ""
+        
+        # Process with Samacheer Kalvi context
+        response = ai_service.generate_samacheer_kalvi_response(
+            question=user_message,
+            subject=subject,
+            class_level=class_level,
+            context_messages=messages[:-1] if len(messages) > 1 else []
+        )
+        
+        return jsonify({
+            'message': response,
+            'source': 'samacheer-kalvi-textbook',
+            'subject': subject,
+            'class': class_level
+        })
+        
+    except Exception as e:
+        logger.error(f"Chat API error: {str(e)}")
+        return jsonify({
+            'message': "I'm having trouble accessing the Samacheer Kalvi textbook content right now. Please try again later.",
+            'error': str(e)
+        }), 500
+
+@app.route('/api/textbook/extract', methods=['POST'])
+def extract_textbook_content():
+    try:
+        data = request.get_json()
+        subject = data.get('subject', '')
+        class_level = data.get('class', '')
+        chapter = data.get('chapter', '')
+        
+        logger.info(f"Extracting content for Class {class_level} {subject} Chapter {chapter}")
+        
+        # Extract content from Samacheer Kalvi PDF
+        content = pdf_processor.extract_chapter_content(
+            subject=subject,
+            class_level=class_level,
+            chapter=chapter
+        )
+        
+        return jsonify({
+            'content': content,
+            'subject': subject,
+            'class': class_level,
+            'chapter': chapter,
+            'source': 'samacheer-kalvi-textbook'
+        })
+        
+    except Exception as e:
+        logger.error(f"Content extraction error: {str(e)}")
+        return jsonify({
+            'error': str(e),
+            'message': 'Failed to extract textbook content'
+        }), 500
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    """Health check endpoint"""
-    return jsonify({"status": "healthy", "message": "Flask API is running"})
+    return jsonify({
+        'status': 'healthy',
+        'service': 'samacheer-kalvi-backend',
+        'version': '1.0.0'
+    })
 
 @app.route('/api/extract-textbook', methods=['POST'])
 def extract_textbook():
@@ -435,6 +518,7 @@ def extract_textbook():
         })
         
     except Exception as e:
+        logger.error(f"Extraction failed: {str(e)}")
         return jsonify({"error": f"Extraction failed: {str(e)}"}), 500
 
 @app.route('/api/get-lesson', methods=['GET'])
@@ -458,6 +542,7 @@ def get_lesson():
             return jsonify({"error": "Lesson not found"}), 404
         
     except Exception as e:
+        logger.error(f"Failed to get lesson: {str(e)}")
         return jsonify({"error": f"Failed to get lesson: {str(e)}"}), 500
 
 @app.route('/api/search-content', methods=['GET'])
@@ -499,7 +584,10 @@ def search_content():
         })
         
     except Exception as e:
+        logger.error(f"Search failed: {str(e)}")
         return jsonify({"error": f"Search failed: {str(e)}"}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    port = int(os.environ.get('PORT', 5000))
+    debug = os.environ.get('FLASK_ENV') == 'development'
+    app.run(host='0.0.0.0', port=port, debug=debug)
