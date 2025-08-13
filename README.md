@@ -1,63 +1,34 @@
-# InsightsLM - Samacheer Kalvi AI Learning Platform
+# Samacheer Kalvi AI Learning Platform
 
-An AI-powered learning platform specifically designed for Tamil Nadu Samacheer Kalvi curriculum, providing authentic textbook-based answers and educational assistance.
+An AI-powered learning platform that provides homework assistance using official Tamil Nadu Samacheer Kalvi textbooks.
 
 ## 🏗️ Project Structure
 
 \`\`\`
 samacheer-ai-learning/
-├── frontend/                 # Next.js React frontend
-│   ├── app/                 # Next.js app directory
-│   ├── components/          # React components
-│   ├── lib/                 # Utility libraries
-│   ├── public/              # Static assets and textbooks
-│   └── package.json         # Frontend dependencies
-├── backend/                 # Python Flask backend
-│   ├── utils/               # Utility modules
-│   ├── app.py              # Main Flask application
-│   ├── config.py           # Configuration settings
-│   └── requirements.txt    # Python dependencies
+├── frontend/          # Next.js React application
+│   ├── app/          # Next.js app directory
+│   ├── components/   # React components
+│   └── public/       # Static assets
+├── backend/          # Python Flask API
+│   ├── utils/        # Utility modules
+│   ├── app.py        # Main Flask application
+│   └── requirements.txt
 └── README.md
 \`\`\`
 
 ## 🚀 Features
 
-- **Authentic Samacheer Kalvi Content**: All answers sourced from official TN Board textbooks
-- **Multi-Subject Support**: History, Geography, Civics, Economics, Mathematics, Science
-- **AI-Powered Homework Assistant**: Get detailed explanations with chapter references
-- **File Upload Support**: Upload images, PDFs, and documents for analysis
-- **Recent Homework History**: Track and revisit previous questions
-- **Responsive Design**: Works seamlessly on desktop and mobile devices
+- **Official Textbook Content**: Extracts answers directly from Samacheer Kalvi textbooks
+- **English-Only Responses**: All answers provided in English with exact textbook content
+- **Page References**: Includes specific page numbers and chapter references
+- **File Upload Support**: Upload images, PDFs, and documents for context
+- **Recent Homework History**: Track and review previous questions
+- **Subject Coverage**: History, Geography, Civics, Economics for Class 10
 
 ## 🛠️ Setup Instructions
 
-### Frontend Setup (Next.js)
-
-1. Navigate to the frontend directory:
-\`\`\`bash
-cd frontend
-\`\`\`
-
-2. Install dependencies:
-\`\`\`bash
-npm install
-\`\`\`
-
-3. Create environment file:
-\`\`\`bash
-cp .env.example .env.local
-\`\`\`
-
-4. Update the environment variables in `.env.local`
-
-5. Start the development server:
-\`\`\`bash
-npm run dev
-\`\`\`
-
-The frontend will be available at `http://localhost:3000`
-
-### Backend Setup (Python Flask)
+### Backend Setup
 
 1. Navigate to the backend directory:
 \`\`\`bash
@@ -80,14 +51,46 @@ pip install -r requirements.txt
 cp .env.example .env
 \`\`\`
 
-5. Update the environment variables in `.env` (especially `OPENAI_API_KEY`)
+5. Add your OpenAI API key to `.env`:
+\`\`\`
+OPENAI_API_KEY=your_api_key_here
+\`\`\`
 
-6. Start the Flask server:
+6. Run the Flask server:
 \`\`\`bash
 python app.py
 \`\`\`
 
-The backend API will be available at `http://localhost:5000`
+The backend will run on `http://localhost:5000`
+
+### Frontend Setup
+
+1. Navigate to the frontend directory:
+\`\`\`bash
+cd frontend
+\`\`\`
+
+2. Install dependencies:
+\`\`\`bash
+npm install
+\`\`\`
+
+3. Create environment file:
+\`\`\`bash
+cp .env.example .env.local
+\`\`\`
+
+4. Update the API URL in `.env.local`:
+\`\`\`
+NEXT_PUBLIC_API_URL=http://localhost:5000
+\`\`\`
+
+5. Run the development server:
+\`\`\`bash
+npm run dev
+\`\`\`
+
+The frontend will run on `http://localhost:3000`
 
 ## 📚 Textbook Integration
 
@@ -101,14 +104,14 @@ Place your Samacheer Kalvi PDF textbooks in the `frontend/public/textbooks/` dir
 
 ## 🔧 Configuration
 
-### Frontend Configuration
-- Update `NEXT_PUBLIC_API_URL` in `.env.local` to point to your backend server
-- Modify `next.config.mjs` for additional Next.js settings
-
 ### Backend Configuration
 - Set your OpenAI API key in the `.env` file
 - Configure CORS origins for your frontend domain
 - Adjust file upload limits and textbook paths as needed
+
+### Frontend Configuration
+- Update `NEXT_PUBLIC_API_URL` in `.env.local` to point to your backend server
+- Modify `next.config.mjs` for additional Next.js settings
 
 ## 🚀 Deployment
 
@@ -132,7 +135,7 @@ Place your Samacheer Kalvi PDF textbooks in the `frontend/public/textbooks/` dir
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is for educational purposes and uses official Tamil Nadu Samacheer Kalvi textbook content.
 
 ## 🆘 Support
 
@@ -142,4 +145,4 @@ For support and questions:
 
 ---
 
-**InsightsLM** - Empowering Tamil Nadu students with AI-powered Samacheer Kalvi education.
+**Samacheer Kalvi AI Learning Platform** - Empowering Tamil Nadu students with AI-powered Samacheer Kalvi education.

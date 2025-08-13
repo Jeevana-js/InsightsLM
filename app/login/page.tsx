@@ -3,37 +3,96 @@
 import type React from "react"
 
 import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { GraduationCap, Mail, Lock, User, School, Eye, EyeOff } from "lucide-react"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Progress } from "@/components/ui/progress"
+import { Eye, EyeOff, CheckCircle, XCircle, AlertCircle, Mail, Lock, User, School, GraduationCap } from "lucide-react"
 import { useRouter } from "next/navigation"
 
+interface PasswordStrength {
+  score: number
+  feedback: string[]
+  isValid: boolean
+}
+
 export default function LoginPage() {
+  const router = useRouter()
+  const [activeTab, setActiveTab] = useState("login")
   const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [message, setMessage] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null)
+
+  // Login form state
   const [loginData, setLoginData] = useState({
     email: "",
     password: "",
   })
-  const [signupData, setSignupData] = useState({
+
+  // Registration form state
+  const [registerData, setRegisterData] = useState({
     name: "",
     email: "",
     password: "",
     confirmPassword: "",
-    class: "10", // Default to Class 10
+    class: "10",
     school: "",
   })
 
-  const router = useRouter()
+  // Password reset state
+  const [resetEmail, setResetEmail] = useState("")
+  const [resetToken, setResetToken] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [resetStep, setResetStep] = useState<"email" | "token" | "password">("email")
+
+  // Email verification state
+  const [verificationToken, setVerificationToken] = useState("")
+
+  const checkPasswordStrength = (password: string): PasswordStrength => {
+    const feedback: string[] = []
+    let score = 0
+
+    if (password.length >= 8) {
+      score += 25
+    } else {
+      feedback.push("At least 8 characters")
+    }
+
+    if (/[a-z]/.test(password)) {
+      score += 25
+    } else {
+      feedback.push("One lowercase letter")
+    }
+
+    if (/[A-Z]/.test(password)) {
+      score += 25
+    } else {
+      feedback.push("One uppercase letter")
+    }
+
+    if (/\d/.test(password)) {
+      score += 25
+    } else {
+      feedback.push("One number")
+    }
+
+    return {
+      score,
+      feedback,
+      isValid: score === 100,
+    }
+  }
+
+  const passwordStrength = checkPasswordStrength(registerData.password)
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
+    setMessage(null)
 
     try {
       const response = await fetch("/api/auth/login", {
@@ -44,37 +103,41 @@ export default function LoginPage() {
         body: JSON.stringify(loginData),
       })
 
-      const data = await response.json()
+      const result = await response.json()
 
-      if (data.success) {
-        // Check if user is Class 10
-        if (data.user.class !== "10") {
-          alert("This platform is currently available only for Class 10 SSLC students.")
-          return
-        }
-
-        localStorage.setItem("user", JSON.stringify(data.user))
-        localStorage.setItem("isAuthenticated", "true")
-        router.push("/")
+      if (result.success) {
+        setMessage({ type: "success", text: result.message })
+        // Store user data in localStorage (in production, use secure session management)
+        localStorage.setItem("user", JSON.stringify(result.user))
+        setTimeout(() => {
+          router.push("/")
+        }, 1000)
       } else {
-        alert(data.message || "Login failed")
+        setMessage({ type: "error", text: result.message })
       }
     } catch (error) {
-      console.error("Login error:", error)
-      alert("Login failed. Please try again.")
+      setMessage({ type: "error", text: "Login failed. Please try again." })
     } finally {
       setIsLoading(false)
     }
   }
 
-  const handleSignup = async (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (signupData.password !== signupData.confirmPassword) {
-      alert("Passwords don't match!")
+    setIsLoading(true)
+    setMessage(null)
+
+    if (registerData.password !== registerData.confirmPassword) {
+      setMessage({ type: "error", text: "Passwords do not match" })
+      setIsLoading(false)
       return
     }
 
-    setIsLoading(true)
+    if (!passwordStrength.isValid) {
+      setMessage({ type: "error", text: "Please meet all password requirements" })
+      setIsLoading(false)
+      return
+    }
 
     try {
       const response = await fetch("/api/auth/register", {
@@ -83,309 +146,459 @@ export default function LoginPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          name: signupData.name,
-          email: signupData.email,
-          password: signupData.password,
-          class: signupData.class,
-          school: signupData.school,
+          name: registerData.name,
+          email: registerData.email,
+          password: registerData.password,
+          class: registerData.class,
+          school: registerData.school,
         }),
       })
 
-      const data = await response.json()
+      const result = await response.json()
 
-      if (data.success) {
-        localStorage.setItem("user", JSON.stringify(data.user))
-        localStorage.setItem("isAuthenticated", "true")
-        router.push("/")
+      if (result.success) {
+        setMessage({ type: "success", text: result.message })
+        if (result.verificationToken) {
+          setVerificationToken(result.verificationToken)
+        }
+        setActiveTab("verify")
       } else {
-        alert(data.message || "Registration failed")
+        setMessage({ type: "error", text: result.message })
       }
     } catch (error) {
-      console.error("Registration error:", error)
-      alert("Registration failed. Please try again.")
+      setMessage({ type: "error", text: "Registration failed. Please try again." })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleVerifyEmail = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoading(true)
+    setMessage(null)
+
+    try {
+      const response = await fetch("/api/auth/verify", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ token: verificationToken }),
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        setMessage({ type: "success", text: result.message })
+        setTimeout(() => {
+          setActiveTab("login")
+        }, 2000)
+      } else {
+        setMessage({ type: "error", text: result.message })
+      }
+    } catch (error) {
+      setMessage({ type: "error", text: "Verification failed. Please try again." })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoading(true)
+    setMessage(null)
+
+    try {
+      let body: any = {}
+
+      if (resetStep === "email") {
+        body = { email: resetEmail }
+      } else if (resetStep === "password") {
+        body = { token: resetToken, newPassword }
+      }
+
+      const response = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        setMessage({ type: "success", text: result.message })
+
+        if (resetStep === "email") {
+          if (result.resetToken) {
+            setResetToken(result.resetToken)
+          }
+          setResetStep("password")
+        } else if (resetStep === "password") {
+          setTimeout(() => {
+            setActiveTab("login")
+            setResetStep("email")
+            setResetEmail("")
+            setResetToken("")
+            setNewPassword("")
+          }, 2000)
+        }
+      } else {
+        setMessage({ type: "error", text: result.message })
+      }
+    } catch (error) {
+      setMessage({ type: "error", text: "Password reset failed. Please try again." })
     } finally {
       setIsLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="bg-blue-600 p-3 rounded-lg inline-block mb-4">
-            <GraduationCap className="h-8 w-8 text-white" />
-          </div>
-          <h1 className="text-3xl font-bold text-white mb-2">InsightLM</h1>
-          <p className="text-gray-400">AI-powered Class 10 SSLC preparation</p>
-          <div className="flex justify-center space-x-2 mt-2">
-            <Badge variant="secondary" className="bg-blue-600/20 text-blue-400 border-blue-600/30">
-              Tamil Nadu State Board
-            </Badge>
-            <Badge variant="secondary" className="bg-green-600/20 text-green-400 border-green-600/30">
-              2024-25 Syllabus
-            </Badge>
-          </div>
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center">
+          <CardTitle className="text-2xl font-bold text-gray-900">Samacheer AI Learning</CardTitle>
+          <CardDescription>Class 10 SSLC • Tamil Nadu State Board</CardDescription>
+        </CardHeader>
 
-        {/* Login/Signup Tabs */}
-        <Card className="bg-gray-800/50 border-gray-700 backdrop-blur-sm">
-          <Tabs defaultValue="login" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 bg-gray-900/50">
-              <TabsTrigger value="login" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
-                Login
-              </TabsTrigger>
-              <TabsTrigger value="signup" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">
-                Sign Up
-              </TabsTrigger>
+        <CardContent>
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="login">Login</TabsTrigger>
+              <TabsTrigger value="register">Register</TabsTrigger>
+              <TabsTrigger value="reset">Reset</TabsTrigger>
+              <TabsTrigger value="verify">Verify</TabsTrigger>
             </TabsList>
 
-            {/* Login Tab */}
-            <TabsContent value="login">
-              <CardHeader>
-                <CardTitle className="text-white text-center">Welcome Back!</CardTitle>
-                <p className="text-gray-400 text-center text-sm">Sign in to continue your SSLC preparation</p>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleLogin} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="email" className="text-gray-300">
-                      Email
-                    </Label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="Enter your email"
-                        value={loginData.email}
-                        onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
-                        className="pl-10 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400"
-                        required
-                      />
-                    </div>
+            {message && (
+              <Alert
+                className={`mt-4 ${message.type === "error" ? "border-red-200 bg-red-50" : message.type === "success" ? "border-green-200 bg-green-50" : "border-blue-200 bg-blue-50"}`}
+              >
+                {message.type === "error" ? (
+                  <XCircle className="h-4 w-4 text-red-600" />
+                ) : message.type === "success" ? (
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                ) : (
+                  <AlertCircle className="h-4 w-4 text-blue-600" />
+                )}
+                <AlertDescription
+                  className={
+                    message.type === "error"
+                      ? "text-red-800"
+                      : message.type === "success"
+                        ? "text-green-800"
+                        : "text-blue-800"
+                  }
+                >
+                  {message.text}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            <TabsContent value="login" className="space-y-4 mt-6">
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="login-email">Email</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="login-email"
+                      type="email"
+                      placeholder="student@demo.com"
+                      value={loginData.email}
+                      onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
+                      className="pl-10"
+                      required
+                    />
                   </div>
+                </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="password" className="text-gray-300">
-                      Password
-                    </Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      <Input
-                        id="password"
-                        type={showPassword ? "text" : "password"}
-                        placeholder="Enter your password"
-                        value={loginData.password}
-                        onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
-                        className="pl-10 pr-10 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400"
-                        required
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-0 top-0 h-full px-3 text-gray-400 hover:text-white"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                  </div>
-
-                  <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={isLoading}>
-                    {isLoading ? "Signing in..." : "Sign In"}
-                  </Button>
-
-                  <div className="text-center">
-                    <Button variant="link" className="text-blue-400 hover:text-blue-300 text-sm">
-                      Forgot your password?
+                <div className="space-y-2">
+                  <Label htmlFor="login-password">Password</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="login-password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="demo123"
+                      value={loginData.password}
+                      onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
+                      className="pl-10 pr-10"
+                      required
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
-                </form>
-
-                {/* Demo Login */}
-                <div className="mt-6 p-4 bg-blue-600/10 border border-blue-600/30 rounded-lg">
-                  <p className="text-blue-400 text-sm font-medium mb-2">Demo Account (Class 10):</p>
-                  <p className="text-gray-300 text-xs">Email: student@demo.com</p>
-                  <p className="text-gray-300 text-xs">Password: demo123</p>
-                  <Button
-                    onClick={() => {
-                      setLoginData({ email: "student@demo.com", password: "demo123" })
-                    }}
-                    variant="outline"
-                    size="sm"
-                    className="mt-2 border-blue-600/50 text-blue-400 hover:bg-blue-600/20"
-                  >
-                    Use Demo Account
-                  </Button>
                 </div>
-              </CardContent>
+
+                <Button type="submit" className="w-full" disabled={isLoading}>
+                  {isLoading ? "Signing in..." : "Sign In"}
+                </Button>
+              </form>
             </TabsContent>
 
-            {/* Signup Tab */}
-            <TabsContent value="signup">
-              <CardHeader>
-                <CardTitle className="text-white text-center">Join Class 10 SSLC!</CardTitle>
-                <p className="text-gray-400 text-center text-sm">Create your account for SSLC preparation</p>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleSignup} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name" className="text-gray-300">
-                      Full Name
-                    </Label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      <Input
-                        id="name"
-                        type="text"
-                        placeholder="Enter your full name"
-                        value={signupData.name}
-                        onChange={(e) => setSignupData({ ...signupData, name: e.target.value })}
-                        className="pl-10 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400"
-                        required
-                      />
-                    </div>
+            <TabsContent value="register" className="space-y-4 mt-6">
+              <form onSubmit={handleRegister} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="register-name">Full Name</Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="register-name"
+                      type="text"
+                      placeholder="Enter your full name"
+                      value={registerData.name}
+                      onChange={(e) => setRegisterData({ ...registerData, name: e.target.value })}
+                      className="pl-10"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="register-email">Email</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="register-email"
+                      type="email"
+                      placeholder="your.email@example.com"
+                      value={registerData.email}
+                      onChange={(e) => setRegisterData({ ...registerData, email: e.target.value })}
+                      className="pl-10"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="register-school">School Name</Label>
+                  <div className="relative">
+                    <School className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="register-school"
+                      type="text"
+                      placeholder="Enter your school name"
+                      value={registerData.school}
+                      onChange={(e) => setRegisterData({ ...registerData, school: e.target.value })}
+                      className="pl-10"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="register-class">Class</Label>
+                  <div className="relative">
+                    <GraduationCap className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="register-class"
+                      type="text"
+                      value="Class 10 SSLC"
+                      disabled
+                      className="pl-10 bg-gray-50"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="register-password">Password</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="register-password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Create a strong password"
+                      value={registerData.password}
+                      onChange={(e) => setRegisterData({ ...registerData, password: e.target.value })}
+                      className="pl-10 pr-10"
+                      required
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
                   </div>
 
+                  {registerData.password && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span>Password Strength</span>
+                        <span
+                          className={
+                            passwordStrength.score === 100
+                              ? "text-green-600"
+                              : passwordStrength.score >= 75
+                                ? "text-yellow-600"
+                                : "text-red-600"
+                          }
+                        >
+                          {passwordStrength.score === 100
+                            ? "Strong"
+                            : passwordStrength.score >= 75
+                              ? "Good"
+                              : passwordStrength.score >= 50
+                                ? "Fair"
+                                : "Weak"}
+                        </span>
+                      </div>
+                      <Progress value={passwordStrength.score} className="h-2" />
+                      {passwordStrength.feedback.length > 0 && (
+                        <div className="text-sm text-gray-600">
+                          <p>Required:</p>
+                          <ul className="list-disc list-inside space-y-1">
+                            {passwordStrength.feedback.map((item, index) => (
+                              <li key={index}>{item}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="register-confirm-password">Confirm Password</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <Input
+                      id="register-confirm-password"
+                      type={showConfirmPassword ? "text" : "password"}
+                      placeholder="Confirm your password"
+                      value={registerData.confirmPassword}
+                      onChange={(e) => setRegisterData({ ...registerData, confirmPassword: e.target.value })}
+                      className="pl-10 pr-10"
+                      required
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    >
+                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                  {registerData.confirmPassword && registerData.password !== registerData.confirmPassword && (
+                    <p className="text-sm text-red-600">Passwords do not match</p>
+                  )}
+                </div>
+
+                <Button type="submit" className="w-full" disabled={isLoading || !passwordStrength.isValid}>
+                  {isLoading ? "Creating Account..." : "Create Account"}
+                </Button>
+              </form>
+            </TabsContent>
+
+            <TabsContent value="reset" className="space-y-4 mt-6">
+              <form onSubmit={handlePasswordReset} className="space-y-4">
+                {resetStep === "email" && (
                   <div className="space-y-2">
-                    <Label htmlFor="signup-email" className="text-gray-300">
-                      Email
-                    </Label>
+                    <Label htmlFor="reset-email">Email</Label>
                     <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                       <Input
-                        id="signup-email"
+                        id="reset-email"
                         type="email"
-                        placeholder="Enter your email"
-                        value={signupData.email}
-                        onChange={(e) => setSignupData({ ...signupData, email: e.target.value })}
-                        className="pl-10 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400"
+                        placeholder="Enter your email address"
+                        value={resetEmail}
+                        onChange={(e) => setResetEmail(e.target.value)}
+                        className="pl-10"
                         required
                       />
                     </div>
                   </div>
+                )}
 
-                  <div className="grid grid-cols-2 gap-4">
+                {resetStep === "password" && (
+                  <>
                     <div className="space-y-2">
-                      <Label htmlFor="class" className="text-gray-300">
-                        Class
-                      </Label>
-                      <Select
-                        value={signupData.class}
-                        onValueChange={(value) => setSignupData({ ...signupData, class: value })}
-                      >
-                        <SelectTrigger className="bg-gray-900/50 border-gray-600 text-white">
-                          <SelectValue placeholder="Class 10" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-gray-800 border-gray-600">
-                          <SelectItem value="10" className="text-white hover:bg-gray-700">
-                            Class 10 (SSLC)
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Label htmlFor="reset-token">Reset Token</Label>
+                      <Input
+                        id="reset-token"
+                        type="text"
+                        placeholder="Enter the reset token from your email"
+                        value={resetToken}
+                        onChange={(e) => setResetToken(e.target.value)}
+                        required
+                      />
                     </div>
-
                     <div className="space-y-2">
-                      <Label htmlFor="school" className="text-gray-300">
-                        School
-                      </Label>
+                      <Label htmlFor="new-password">New Password</Label>
                       <div className="relative">
-                        <School className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                         <Input
-                          id="school"
-                          type="text"
-                          placeholder="School name"
-                          value={signupData.school}
-                          onChange={(e) => setSignupData({ ...signupData, school: e.target.value })}
-                          className="pl-10 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400"
+                          id="new-password"
+                          type={showPassword ? "text" : "password"}
+                          placeholder="Enter your new password"
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          className="pl-10 pr-10"
                           required
                         />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                          onClick={() => setShowPassword(!showPassword)}
+                        >
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </Button>
                       </div>
                     </div>
-                  </div>
+                  </>
+                )}
 
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-password" className="text-gray-300">
-                      Password
-                    </Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      <Input
-                        id="signup-password"
-                        type={showPassword ? "text" : "password"}
-                        placeholder="Create a password"
-                        value={signupData.password}
-                        onChange={(e) => setSignupData({ ...signupData, password: e.target.value })}
-                        className="pl-10 pr-10 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400"
-                        required
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-0 top-0 h-full px-3 text-gray-400 hover:text-white"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                  </div>
+                <Button type="submit" className="w-full" disabled={isLoading}>
+                  {isLoading ? "Processing..." : resetStep === "email" ? "Send Reset Link" : "Reset Password"}
+                </Button>
+              </form>
+            </TabsContent>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="confirm-password" className="text-gray-300">
-                      Confirm Password
-                    </Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      <Input
-                        id="confirm-password"
-                        type={showPassword ? "text" : "password"}
-                        placeholder="Confirm your password"
-                        value={signupData.confirmPassword}
-                        onChange={(e) => setSignupData({ ...signupData, confirmPassword: e.target.value })}
-                        className="pl-10 bg-gray-900/50 border-gray-600 text-white placeholder-gray-400"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={isLoading}>
-                    {isLoading ? "Creating Account..." : "Create Account"}
-                  </Button>
-                </form>
-
-                {/* Class 10 Info */}
-                <div className="mt-6 p-4 bg-green-600/10 border border-green-600/30 rounded-lg">
-                  <p className="text-green-400 text-sm font-medium mb-2">🎯 Class 10 SSLC Features:</p>
-                  <ul className="text-gray-300 text-xs space-y-1">
-                    <li>• Official TN Board textbooks (2024-25)</li>
-                    <li>• AI tutor for all 5 subjects</li>
-                    <li>• SSLC exam preparation</li>
-                    <li>• Interactive quizzes and practice</li>
-                  </ul>
+            <TabsContent value="verify" className="space-y-4 mt-6">
+              <form onSubmit={handleVerifyEmail} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="verification-token">Verification Token</Label>
+                  <Input
+                    id="verification-token"
+                    type="text"
+                    placeholder="Enter the verification token"
+                    value={verificationToken}
+                    onChange={(e) => setVerificationToken(e.target.value)}
+                    required
+                  />
+                  <p className="text-sm text-gray-600">
+                    Check your email for the verification token (in demo mode, it's displayed in the console)
+                  </p>
                 </div>
-              </CardContent>
+
+                <Button type="submit" className="w-full" disabled={isLoading}>
+                  {isLoading ? "Verifying..." : "Verify Email"}
+                </Button>
+              </form>
             </TabsContent>
           </Tabs>
-        </Card>
+        </CardContent>
 
-        {/* Footer */}
-        <div className="text-center mt-6">
-          <p className="text-gray-400 text-sm">
-            By continuing, you agree to our{" "}
-            <Button variant="link" className="text-blue-400 hover:text-blue-300 p-0 h-auto text-sm">
-              Terms of Service
-            </Button>{" "}
-            and{" "}
-            <Button variant="link" className="text-blue-400 hover:text-blue-300 p-0 h-auto text-sm">
-              Privacy Policy
-            </Button>
-          </p>
-          <p className="text-gray-500 text-xs mt-2">Currently supporting Class 10 SSLC students only</p>
-        </div>
-      </div>
+        <CardFooter className="text-center">
+          <p className="text-sm text-gray-600">Demo credentials: student@demo.com / demo123</p>
+        </CardFooter>
+      </Card>
     </div>
   )
 }

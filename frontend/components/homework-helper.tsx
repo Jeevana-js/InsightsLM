@@ -2,13 +2,13 @@
 
 import type React from "react"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Send, Upload, BookOpen, Clock, CheckCircle, FileText, ImageIcon, File } from "lucide-react"
+import { Upload, BookOpen, FileText, ImageIcon, File, Search, BookMarked } from "lucide-react"
 
 interface HomeworkHelperProps {
   selectedClass: string
@@ -24,14 +24,51 @@ interface HomeworkItem {
   files?: File[]
 }
 
+interface RelatedChapter {
+  title: string
+  page?: string
+}
+
+interface KeyConcept {
+  concept: string
+  page?: string
+}
+
 export default function HomeworkHelper({ selectedClass, selectedSubject }: HomeworkHelperProps) {
   const [question, setQuestion] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [currentAnswer, setCurrentAnswer] = useState("")
   const [recentHomework, setRecentHomework] = useState<HomeworkItem[]>([])
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([])
+  const [relatedChapters, setRelatedChapters] = useState<string[]>([])
+  const [keyConcepts, setKeyConcepts] = useState<string[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Load recent homework from localStorage
+  useEffect(() => {
+    const savedHomework = localStorage.getItem("recentHomework")
+    if (savedHomework) {
+      try {
+        const parsed = JSON.parse(savedHomework)
+        // Convert string dates back to Date objects
+        const homeworkWithDates = parsed.map((item: any) => ({
+          ...item,
+          timestamp: new Date(item.timestamp)
+        }))
+        setRecentHomework(homeworkWithDates)
+      } catch (e) {
+        console.error("Failed to parse saved homework", e)
+      }
+    }
+  }, [])
+
+  // Save recent homework to localStorage
+  useEffect(() => {
+    if (recentHomework.length > 0) {
+      localStorage.setItem("recentHomework", JSON.stringify(recentHomework))
+    }
+  }, [recentHomework])
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault()
@@ -39,10 +76,12 @@ export default function HomeworkHelper({ selectedClass, selectedSubject }: Homew
 
     setIsLoading(true)
     setCurrentAnswer("")
+    setRelatedChapters([])
+    setKeyConcepts([])
 
     try {
-      // Enhanced prompt to specifically request Samacheer Kalvi content
-      const enhancedQuestion = `Please answer this question using only content from the official Samacheer Kalvi Class ${selectedClass} ${selectedSubject} textbook. Include specific chapter references, page numbers, and exact content from the textbook: ${question}`
+      // Enhanced prompt to specifically request Samacheer Kalvi textbook content in English only
+      const enhancedQuestion = `Extract the answer from the official Samacheer Kalvi Class ${selectedClass} ${selectedSubject} textbook for this question: ${question}. Provide the exact content from the textbook with page references in English only.`
 
       const response = await fetch("/api/chat", {
         method: "POST",
@@ -53,7 +92,12 @@ export default function HomeworkHelper({ selectedClass, selectedSubject }: Homew
           messages: [
             {
               role: "system",
-              content: `You are a Samacheer Kalvi textbook expert. Answer questions using only official Samacheer Kalvi Class ${selectedClass} ${selectedSubject} textbook content. Always mention "Samacheer Kalvi" in your response and provide specific chapter and page references where possible.`,
+              content: `You are an advanced Samacheer Kalvi textbook content extractor. Extract and provide answers ONLY from the official Samacheer Kalvi Class ${selectedClass} ${selectedSubject} textbook. IMPORTANT REQUIREMENTS:
+              1. Provide answers in ENGLISH ONLY - absolutely NO Tamil text
+              2. Extract exact content from the textbook with page references
+              3. Include specific chapter names and section references
+              4. Use exact definitions, formulas, and explanations as written in the textbook
+              5. Format your response with proper headings, bullet points, and paragraphs for readability`,
             },
             {
               role: "user",
@@ -66,12 +110,15 @@ export default function HomeworkHelper({ selectedClass, selectedSubject }: Homew
         }),
       })
 
-      if (!response.ok) throw new Error("Failed to get response")
+      if (!response.ok) throw new Error("Failed to get response from textbook")
 
       const data = await response.json()
-      const answer =
-        data.message ||
-        "I'm here to help with your Samacheer Kalvi textbook questions! Could you please rephrase your question?"
+      const answer = data.message || 
+        "I couldn't find this specific content in the Samacheer Kalvi textbook. Please check the chapter or rephrase your question."
+      
+      // Store related chapters and key concepts if available
+      if (data.related_chapters) setRelatedChapters(data.related_chapters)
+      if (data.key_concepts) setKeyConcepts(data.key_concepts)
 
       setCurrentAnswer(answer)
 
@@ -88,7 +135,7 @@ export default function HomeworkHelper({ selectedClass, selectedSubject }: Homew
       setRecentHomework((prev) => [newHomework, ...prev.slice(0, 4)])
     } catch (error) {
       setCurrentAnswer(
-        "I apologize, but I'm having trouble accessing the Samacheer Kalvi textbook content right now. Please try again later or check if your question relates to topics covered in the current Samacheer Kalvi syllabus.",
+        "I'm having trouble accessing the Samacheer Kalvi textbook content right now. Please ensure your question relates to topics covered in the official textbook and try again.",
       )
     } finally {
       setIsLoading(false)
@@ -115,6 +162,8 @@ export default function HomeworkHelper({ selectedClass, selectedSubject }: Homew
     setQuestion("")
     setCurrentAnswer("")
     setUploadedFiles([])
+    setRelatedChapters([])
+    setKeyConcepts([])
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
@@ -127,11 +176,11 @@ export default function HomeworkHelper({ selectedClass, selectedSubject }: Homew
   }
 
   const exampleQuestions = [
-    "Explain the concept of democracy from Samacheer Kalvi Class 10 Civics Chapter 1",
-    "What are the main features of Indian Constitution according to Samacheer Kalvi textbook?",
-    "Describe the water cycle as explained in Samacheer Kalvi Geography textbook",
-    "Solve this quadratic equation using the method from Samacheer Kalvi Mathematics Chapter 3",
-    "Explain photosynthesis process from Samacheer Kalvi Biology textbook with diagram",
+    "What is democracy according to the Samacheer Kalvi Civics textbook?",
+    "Explain the physical features of India from Geography Chapter 1",
+    "What are the causes of World War I mentioned in the History textbook?",
+    "Define GDP and its calculation methods from Economics textbook",
+    "Describe the Indian Constitution features from Civics Chapter 1",
   ]
 
   return (
@@ -144,9 +193,9 @@ export default function HomeworkHelper({ selectedClass, selectedSubject }: Homew
               <BookOpen className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Samacheer Kalvi Homework Assistant</h2>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Advanced Samacheer Kalvi Assistant</h2>
               <p className="text-sm text-gray-600 dark:text-gray-400">
-                Class {selectedClass} {selectedSubject && `• ${selectedSubject}`}
+                Official Textbook Content Extractor • Class {selectedClass} {selectedSubject && `• ${selectedSubject}`}
               </p>
             </div>
           </div>
@@ -155,8 +204,8 @@ export default function HomeworkHelper({ selectedClass, selectedSubject }: Homew
               variant="secondary"
               className="bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-400"
             >
-              <BookOpen className="h-3 w-3 mr-1" />
-              Official Samacheer Kalvi Content
+              <Search className="h-3 w-3 mr-1" />
+              English Only
             </Badge>
           </div>
         </div>
@@ -174,8 +223,8 @@ export default function HomeworkHelper({ selectedClass, selectedSubject }: Homew
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
-                  <BookOpen className="h-5 w-5 text-blue-600" />
-                  <span>Ask Your Samacheer Kalvi Question</span>
+                  <BookMarked className="h-5 w-5 text-blue-600" />
+                  <span>Extract Answer from Samacheer Kalvi Textbook</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -187,14 +236,15 @@ export default function HomeworkHelper({ selectedClass, selectedSubject }: Homew
                     onKeyPress={handleKeyPress}
                     placeholder={
                       selectedSubject
-                        ? `Ask any question about your Class ${selectedClass} ${selectedSubject} Samacheer Kalvi textbook...
+                        ? `Ask any question from your Class ${selectedClass} ${selectedSubject} Samacheer Kalvi textbook...
 
 Examples:
-• "Explain the concept from Chapter 2, Page 45"
-• "What is the formula for... from the textbook?"
-• "Describe the diagram on Page 67"
-• "Give me practice problems from Chapter 5"`
-                        : "Please select a subject first to get help with your Samacheer Kalvi homework"
+• "What is the definition of democracy from Chapter 1?"
+• "Explain the water cycle from Geography textbook"
+• "List the causes of World War I from History Chapter 1"
+• "What is GDP? Explain its calculation methods"
+• "Describe India's physical features from the textbook"`
+                        : "Please select a subject first to extract content from the Samacheer Kalvi textbook"
                     }
                     disabled={!selectedSubject || isLoading}
                     className="min-h-[120px] resize-none"
@@ -268,190 +318,4 @@ Examples:
                     Clear All
                   </Button>
                   <Button
-                    onClick={handleSubmit}
-                    disabled={!selectedSubject || isLoading || !question.trim()}
-                    className="bg-blue-600 hover:bg-blue-700"
-                  >
-                    {isLoading ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Searching Samacheer Kalvi Textbook...
-                      </>
-                    ) : (
-                      <>
-                        <Send className="h-4 w-4 mr-2" />
-                        Get Answer
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Answer Section */}
-            {currentAnswer && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <CheckCircle className="h-5 w-5 text-green-600" />
-                    <span>Answer from Samacheer Kalvi Textbook</span>
-                    <Badge variant="outline" className="ml-auto">
-                      Class {selectedClass}
-                    </Badge>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="prose prose-sm max-w-none dark:prose-invert">
-                    <div className="whitespace-pre-wrap text-gray-700 dark:text-gray-300 leading-relaxed">
-                      {currentAnswer}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Information Cards */}
-            <div className="grid md:grid-cols-2 gap-4">
-              <Card className="border-green-200 bg-green-50 dark:bg-green-900/20 dark:border-green-800">
-                <CardContent className="p-4">
-                  <div className="flex items-start space-x-3">
-                    <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
-                    <div>
-                      <h4 className="font-semibold text-green-800 dark:text-green-400 mb-1">
-                        Authentic Samacheer Kalvi Content
-                      </h4>
-                      <p className="text-sm text-green-700 dark:text-green-300">
-                        All answers are sourced from official Samacheer Kalvi textbooks with page references and chapter
-                        details.
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-blue-200 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-800">
-                <CardContent className="p-4">
-                  <div className="flex items-start space-x-3">
-                    <BookOpen className="h-5 w-5 text-blue-600 mt-0.5" />
-                    <div>
-                      <h4 className="font-semibold text-blue-800 dark:text-blue-400 mb-1">Complete Subject Coverage</h4>
-                      <p className="text-sm text-blue-700 dark:text-blue-300">
-                        History, Geography, Civics, Economics, Mathematics, Science - all Samacheer Kalvi subjects
-                        covered.
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Example Questions */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Example Questions</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-2">
-                  {exampleQuestions.slice(0, 3).map((example, index) => (
-                    <Button
-                      key={index}
-                      variant="ghost"
-                      className="justify-start h-auto p-3 text-left text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
-                      onClick={() => setQuestion(example)}
-                    >
-                      <span className="truncate">{example}</span>
-                    </Button>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="recent" className="flex-1 overflow-auto p-6">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold">Recent Homework</h3>
-                <Badge variant="outline">{recentHomework.length} questions</Badge>
-              </div>
-
-              {recentHomework.length === 0 ? (
-                <Card>
-                  <CardContent className="p-8 text-center">
-                    <Clock className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <h4 className="text-lg font-medium text-gray-600 dark:text-gray-400 mb-2">No Recent Homework</h4>
-                    <p className="text-sm text-gray-500 dark:text-gray-500">
-                      Your recent Samacheer Kalvi homework questions will appear here
-                    </p>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="space-y-4">
-                  {recentHomework.map((item) => (
-                    <Card key={item.id}>
-                      <CardHeader>
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center space-x-2 mb-2">
-                              <Badge
-                                variant="secondary"
-                                className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
-                              >
-                                <BookOpen className="h-3 w-3 mr-1" />
-                                Samacheer Kalvi
-                              </Badge>
-                              <Badge variant="outline">{item.subject}</Badge>
-                            </div>
-                            <h4 className="font-medium text-gray-900 dark:text-white mb-1">{item.question}</h4>
-                            <p className="text-xs text-gray-500">
-                              {item.timestamp.toLocaleDateString()} at {item.timestamp.toLocaleTimeString()}
-                            </p>
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="prose prose-sm max-w-none dark:prose-invert">
-                          <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                            {item.answer.length > 200 ? `${item.answer.substring(0, 200)}...` : item.answer}
-                          </div>
-                        </div>
-                        {item.files && item.files.length > 0 && (
-                          <div className="mt-3 pt-3 border-t">
-                            <p className="text-xs text-gray-500 mb-2">Attached files:</p>
-                            <div className="flex flex-wrap gap-2">
-                              {item.files.map((file, index) => (
-                                <div
-                                  key={index}
-                                  className="flex items-center space-x-1 text-xs bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded"
-                                >
-                                  {getFileIcon(file)}
-                                  <span>{file.name}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        <div className="mt-3 flex justify-end">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setQuestion(item.question)
-                              setCurrentAnswer(item.answer)
-                            }}
-                            className="text-xs"
-                          >
-                            View Full Answer
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-            </div>
-          </TabsContent>
-        </Tabs>
-      </div>
-    </div>
-  )
-}
+                    onClick={handleSubmit

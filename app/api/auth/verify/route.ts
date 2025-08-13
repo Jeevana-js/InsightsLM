@@ -3,30 +3,27 @@ import type { NextRequest } from "next/server"
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, password } = await req.json()
+    const { token } = await req.json()
 
-    if (!email || !password) {
+    if (!token) {
       return Response.json(
         {
           success: false,
-          message: "Email and password are required",
+          message: "Verification token is required",
         },
         { status: 400 },
       )
     }
 
-    // Get client IP for security logging
-    const ip = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown"
-
-    const result = await authService.login(email, password, ip)
+    const result = await authService.verifyEmail(token)
 
     if (!result.success) {
-      return Response.json(result, { status: 401 })
+      return Response.json(result, { status: 400 })
     }
 
     return Response.json(result)
   } catch (error) {
-    console.error("Login error:", error)
+    console.error("Email verification error:", error)
     return Response.json(
       {
         success: false,

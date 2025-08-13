@@ -1,29 +1,37 @@
 import os
 from dotenv import load_dotenv
 
-# Load environment variables
+# Load environment variables from .env file
 load_dotenv()
 
 class Config:
-    # Flask settings
-    SECRET_KEY = os.getenv('SECRET_KEY', 'samacheer-kalvi-secret-key')
-    DEBUG = os.getenv('FLASK_ENV') == 'development'
+    # Flask configuration
+    SECRET_KEY = os.environ.get('SECRET_KEY') or 'samacheer-kalvi-secret-key-2024'
+    DEBUG = os.environ.get('FLASK_ENV') == 'development'
     
-    # OpenAI settings
-    OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+    # OpenAI configuration
+    OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
     
-    # Database settings (if needed)
-    DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite:///samacheer_kalvi.db')
+    # PDF processing configuration
+    MAX_PDF_SIZE = 50 * 1024 * 1024  # 50MB
+    PDF_TIMEOUT = 60  # seconds
     
-    # File upload settings
-    MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
-    UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', 'uploads')
+    # Cache configuration
+    CACHE_TIMEOUT = 3600  # 1 hour
     
-    # Textbook settings
-    TEXTBOOK_FOLDER = os.getenv('TEXTBOOK_FOLDER', 'textbooks')
+    # Logging configuration
+    LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
     
-    # CORS settings
-    CORS_ORIGINS = os.getenv('CORS_ORIGINS', 'http://localhost:3000').split(',')
+    # CORS configuration
+    CORS_ORIGINS = os.environ.get('CORS_ORIGINS', 'http://localhost:3000').split(',')
+    
+    # API configuration
+    MAX_SEARCH_RESULTS = 10
+    MAX_RESPONSE_LENGTH = 2000
+    
+    @staticmethod
+    def init_app(app):
+        pass
 
 class DevelopmentConfig(Config):
     DEBUG = True
@@ -31,7 +39,6 @@ class DevelopmentConfig(Config):
 class ProductionConfig(Config):
     DEBUG = False
 
-# Configuration dictionary
 config = {
     'development': DevelopmentConfig,
     'production': ProductionConfig,

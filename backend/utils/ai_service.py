@@ -1,69 +1,157 @@
 import openai
 import os
-from typing import List, Dict
-import logging
-
-logger = logging.getLogger(__name__)
+from typing import List, Dict, Any
+import re
+from .pdf_processor import PDFProcessor
 
 class AIService:
     def __init__(self):
-        self.client = openai.OpenAI(
-            api_key=os.getenv('OPENAI_API_KEY')
-        )
+        self.client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+        self.pdf_processor = PDFProcessor()
         
-    def generate_samacheer_kalvi_response(self, question: str, subject: str, class_level: str, context_messages: List[Dict] = None) -> str:
-        """Generate response specifically from Samacheer Kalvi textbook content"""
-        
+    def generate_answer(self, question: str, subject: str = "social", class_level: str = "10") -> Dict[str, Any]:
+        """Generate answer from textbook content - English only"""
         try:
-            # Create Samacheer Kalvi specific system prompt
-            system_prompt = f"""You are an expert on Tamil Nadu Samacheer Kalvi textbooks. You must answer questions using ONLY content from the official Samacheer Kalvi Class {class_level} {subject} textbook.
-
-IMPORTANT GUIDELINES:
-1. Always mention "Samacheer Kalvi" in your response
-2. Provide specific chapter references when possible (e.g., "Chapter 3: Democracy")
-3. Include page numbers if you can reference them (e.g., "As mentioned on page 45...")
-4. Use exact terminology and definitions from the textbook
-5. If diagrams or figures are mentioned, describe them as they appear in the textbook
-6. For mathematical problems, use the exact methods taught in Samacheer Kalvi
-7. Always maintain the educational tone appropriate for Class {class_level} students
-
-Subject: {subject}
-Class: {class_level}
-Textbook: Official Tamil Nadu Samacheer Kalvi Curriculum
-
-If you cannot find the specific information in the Samacheer Kalvi textbook, clearly state that and suggest checking the relevant chapter or section."""
-
-            # Prepare messages
-            messages = [
-                {"role": "system", "content": system_prompt}
-            ]
+            # Get relevant content from textbook
+            relevant_content = self.pdf_processor.search_content(question, subject, class_level)
             
-            # Add context messages if provided
-            if context_messages:
-                messages.extend(context_messages)
+            if not relevant_content:
+                return {
+                    "success": False,
+                    "message": "No relevant content found in the textbook for this question."
+                }
             
-            # Add the current question
-            messages.append({
-                "role": "user", 
-                "content": f"Please answer this question using the Samacheer Kalvi Class {class_level} {subject} textbook: {question}"
-            })
+            # Create enhanced prompt for better textbook-based answers
+            system_prompt = """You are an advanced AI tutor specializing in Tamil Nadu State Board Class 10 curriculum. 
             
-            # Generate response
+            IMPORTANT INSTRUCTIONS:
+            1. Answer ONLY in English - NO Tamil text whatsoever
+            2. Base your answers strictly on the provided textbook content
+            3. Include specific page references and chapter information
+            4. Provide detailed explanations with examples from the textbook
+            5. Structure your response with clear headings and bullet points
+            6. Include study tips and exam preparation advice
+            7. Reference official Samacheer Kalvi textbook content only
+            
+            Format your response as:
+            **Answer from Samacheer Kalvi Textbook:**
+            [Detailed explanation based on textbook content]
+            
+            **Key Points:**
+            • [Important point 1]
+            • [Important point 2]
+            • [Important point 3]
+            
+            **Textbook Reference:**
+            Chapter: [Chapter name and number]
+            Page: [Page number]
+            
+            **Study Tip:**
+            [Helpful study advice related to the topic]
+            """
+            
+            user_prompt = f"""
+            Question: {question}
+            Subject: {subject.title()}
+            Class: {class_level}
+            
+            Relevant textbook content:
+            {relevant_content}
+            
+            Please provide a comprehensive answer based strictly on this textbook content. 
+            Remember: Answer only in English, no Tamil text.
+            """
+            
             response = self.client.chat.completions.create(
                 model="gpt-4",
-                messages=messages,
-                max_tokens=1000,
-                temperature=0.3,  # Lower temperature for more consistent educational content
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                max_tokens=1500,
+                temperature=0.3
             )
             
             answer = response.choices[0].message.content
             
-            # Ensure the response mentions Samacheer Kalvi
-            if "Samacheer Kalvi" not in answer:
-                answer = f"According to the Samacheer Kalvi Class {class_level} {subject} textbook:\n\n{answer}"
+            # Double-check to remove any Tamil text that might have slipped through
+            answer = self._remove_tamil_text(answer)
             
-            return answer
+            return {
+                "success": True,
+                "answer": answer,
+                "source": "Official Samacheer Kalvi Textbook",
+                "subject": subject,
+                "class": class_level
+            }
             
         except Exception as e:
-            logger.error(f"AI Service error: {str(e)}")
-            return f"I apologize, but I'm having trouble accessing the Samacheer Kalvi Class {class_level} {subject} textbook content right now. Please try rephrasing your question or check if the topic is covered in your current syllabus."
+            return {
+                "success": False,
+                "message": f"Error generating answer: {str(e)}"
+            }
+    
+    def _remove_tamil_text(self, text: str) -> str:
+        """Remove any Tamil characters from the text"""
+        # Tamil Unicode range: U+0B80–U+0BFF
+        tamil_pattern = r'[\u0B80-\u0BFF]+'
+        # Remove Tamil characters
+        cleaned_text = re.sub(tamil_pattern, '', text)
+        # Clean up extra whitespace
+        cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()
+        return cleaned_text
+    
+    def generate_quiz_questions(self, subject: str, topic: str, count: int = 5) -> Dict[str, Any]:
+        """Generate quiz questions from textbook content"""
+        try:
+            # Get content for the specific topic
+            content = self.pdf_processor.get_topic_content(subject, topic)
+            
+            if not content:
+                return {
+                    "success": False,
+                    "message": "No content found for this topic."
+                }
+            
+            system_prompt = """You are creating quiz questions for Tamil Nadu Class 10 students based on official textbook content.
+            
+            Create multiple choice questions that:
+            1. Are based strictly on the provided textbook content
+            2. Test understanding of key concepts
+            3. Include proper explanations
+            4. Reference specific textbook pages
+            5. Are appropriate for Class 10 level
+            
+            Format each question as JSON with: question, options (array of 4), correct_answer (index), explanation, page_reference
+            """
+            
+            user_prompt = f"""
+            Create {count} multiple choice questions based on this textbook content:
+            
+            Subject: {subject}
+            Topic: {topic}
+            Content: {content}
+            
+            Return as a JSON array of questions.
+            """
+            
+            response = self.client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                max_tokens=2000,
+                temperature=0.4
+            )
+            
+            return {
+                "success": True,
+                "questions": response.choices[0].message.content
+            }
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"Error generating quiz: {str(e)}"
+            }
